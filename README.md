@@ -36,6 +36,10 @@ brew install --cask aerialwall
 
 ## Use
 
+> **AerialWall is a menu bar app** — nothing opens when you launch it. Look for
+> the ⛰ mountain icon near the top-right of your screen (on a MacBook it can
+> hide behind the notch if your menu bar is crowded).
+
 1. Download at least one aerial first: **System Settings → Wallpaper**, pick an
    aerial (Landscape / Cityscape / Underwater / Earth) and wait for it to finish
    downloading.
