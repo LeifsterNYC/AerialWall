@@ -362,6 +362,16 @@ private struct PanelConfigurator: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
+            // Round the panel itself — the bare MenuBarExtra window is square.
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            if let contentView = window.contentView {
+                contentView.wantsLayer = true
+                contentView.layer?.cornerRadius = 16
+                contentView.layer?.cornerCurve = .continuous
+                contentView.layer?.masksToBounds = true
+            }
+            window.invalidateShadow()
             Self.snugToMenuBar(window)
             keyObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didBecomeKeyNotification,
