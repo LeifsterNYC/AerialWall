@@ -66,11 +66,14 @@ struct MenuView: View {
             header
             Divider()
             controls
-            if visibleAssets.isEmpty {
-                emptyState
-            } else {
-                gallery
+            Group {
+                if visibleAssets.isEmpty {
+                    emptyState
+                } else {
+                    gallery
+                }
             }
+            .frame(height: galleryHeight)
             Divider()
             footer
         }
@@ -175,13 +178,21 @@ struct MenuView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Height ignores the search text so the panel doesn't resize on every
+    /// keystroke — fewer results just leave empty space in the scroll area.
+    private var galleryHeight: CGFloat {
+        var shown = tab == .downloaded ? state.assets.filter(\.isDownloaded) : state.assets
+        if let categoryID {
+            shown = shown.filter { $0.categoryIDs.contains(categoryID) }
+        }
+        let rows = max(1, (shown.count + 1) / 2)
+        return min(CGFloat(rows) * 104 + 14, 380)
+    }
+
     private var gallery: some View {
-        let shown = visibleAssets
-        let rows = (shown.count + 1) / 2
-        let contentHeight = CGFloat(rows) * 104 + 14
-        return ScrollView {
+        ScrollView {
             LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(shown) { asset in
+                ForEach(visibleAssets) { asset in
                     AssetTile(
                         asset: asset,
                         thumbnail: state.thumbnails[asset.id],
@@ -200,7 +211,6 @@ struct MenuView: View {
             }
             .padding(12)
         }
-        .frame(height: min(contentHeight, 380))
         .opacity(state.wallpaperEnabled ? 1 : 0.5)
     }
 
@@ -358,6 +368,7 @@ private struct PanelConfigurator: NSViewRepresentable {
     final class ConfigView: NSView {
         private var keyObserver: Any?
         private var resignObserver: Any?
+        private var resizeObserver: Any?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -393,6 +404,17 @@ private struct PanelConfigurator: NSViewRepresentable {
                 guard let window = notification.object as? NSWindow, window.isVisible else { return }
                 window.close()
             }
+            // Content-driven resizes (tab or category switches) leave a stale
+            // rounded mask and shadow behind unless recomputed.
+            resizeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResizeNotification,
+                object: window,
+                queue: .main
+            ) { notification in
+                guard let window = notification.object as? NSWindow else { return }
+                Self.snugToMenuBar(window)
+                window.invalidateShadow()
+            }
         }
 
         private static func snugToMenuBar(_ window: NSWindow) {
@@ -408,6 +430,9 @@ private struct PanelConfigurator: NSViewRepresentable {
             }
             if let resignObserver {
                 NotificationCenter.default.removeObserver(resignObserver)
+            }
+            if let resizeObserver {
+                NotificationCenter.default.removeObserver(resizeObserver)
             }
         }
     }
