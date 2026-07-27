@@ -75,6 +75,7 @@ struct MenuView: View {
             footer
         }
         .frame(width: 320)
+        .background(PanelConfigurator())
         .onAppear {
             if !state.assets.contains(where: \.isDownloaded) { tab = .all }
         }
@@ -153,6 +154,7 @@ struct MenuView: View {
     private func chip(name: String, id: String?) -> some View {
         Button(name) { categoryID = id }
             .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
             .controlSize(.small)
             .tint(categoryID == id ? Color.accentColor : .secondary)
     }
@@ -265,9 +267,9 @@ private struct AssetTile: View {
             VStack(spacing: 4) {
                 preview
                     .frame(width: 132, height: 74)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2.5)
                     )
                     .overlay(alignment: .bottomTrailing) { badge }
@@ -347,6 +349,46 @@ private struct AssetTile: View {
                 .padding(4)
         }
     }
+}
+
+/// Tunes the MenuBarExtra window: dismiss when focus moves elsewhere
+/// (other menu bar items, other apps) and sit snug under the menu bar
+/// instead of floating a few points below it.
+private struct PanelConfigurator: NSViewRepresentable {
+    final class ConfigView: NSView {
+        private var keyObserver: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.hidesOnDeactivate = true
+            Self.snugToMenuBar(window)
+            keyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { notification in
+                guard let window = notification.object as? NSWindow else { return }
+                Self.snugToMenuBar(window)
+            }
+        }
+
+        private static func snugToMenuBar(_ window: NSWindow) {
+            guard let screen = window.screen ?? NSScreen.main else { return }
+            var frame = window.frame
+            frame.origin.y = screen.visibleFrame.maxY - frame.height
+            window.setFrame(frame, display: false)
+        }
+
+        deinit {
+            if let keyObserver {
+                NotificationCenter.default.removeObserver(keyObserver)
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> ConfigView { ConfigView() }
+    func updateNSView(_ nsView: ConfigView, context: Context) {}
 }
 
 /// Muted, looping inline video used for the hover preview.
