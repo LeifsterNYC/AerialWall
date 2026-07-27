@@ -8,6 +8,7 @@ struct AerialWallApp: App {
         MenuBarExtra("AerialWall", systemImage: "mountain.2.fill") {
             MenuView()
                 .environmentObject(appDelegate.state)
+                .environmentObject(appDelegate.state.downloader)
         }
         .menuBarExtraStyle(.window)
     }

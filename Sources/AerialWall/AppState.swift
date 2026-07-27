@@ -19,10 +19,13 @@ final class AppState: ObservableObject {
         didSet { applyPlayback() }
     }
 
+    let downloader = DownloadManager()
+
     private let wallpaper = WallpaperController()
     private let powerMonitor = PowerMonitor()
     private var activeAssetID: String?
     private var thumbnailTask: Task<Void, Never>?
+    private var pendingSelectionID: String?
 
     var launchesAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
@@ -47,6 +50,33 @@ final class AppState: ObservableObject {
         wallpaper.onDesktopVisibilityChange = { [weak self] _ in
             self?.applyPlayback()
         }
+        downloader.onComplete = { [weak self] assetID in
+            guard let self else { return }
+            refreshLibrary()
+            if pendingSelectionID == assetID {
+                pendingSelectionID = nil
+                selectedAssetID = assetID
+                wallpaperEnabled = true
+            }
+        }
+        refreshLibrary()
+    }
+
+    /// Starts downloading an aerial and selects it once it lands.
+    func downloadAndSelect(_ asset: AerialAsset) {
+        pendingSelectionID = asset.id
+        downloader.download(asset)
+    }
+
+    func deleteDownload(_ asset: AerialAsset) {
+        guard asset.isDeletable, let localURL = asset.localURL else { return }
+        do {
+            try FileManager.default.removeItem(at: localURL)
+        } catch {
+            NSLog("Failed to delete \(asset.name): \(error)")
+            return
+        }
+        thumbnails[asset.id] = nil
         refreshLibrary()
     }
 
@@ -60,7 +90,7 @@ final class AppState: ObservableObject {
     /// would otherwise spin up one 4K video decoder per asset simultaneously.
     private func generateMissingThumbnails() {
         thumbnailTask?.cancel()
-        let pending = assets.filter { thumbnails[$0.id] == nil }
+        let pending = assets.filter { $0.isDownloaded && thumbnails[$0.id] == nil }
         guard !pending.isEmpty else { return }
         thumbnailTask = Task {
             for start in stride(from: 0, to: pending.count, by: 4) {
@@ -79,14 +109,17 @@ final class AppState: ObservableObject {
     }
 
     private func applySelection() {
-        guard wallpaperEnabled, let asset = assets.first(where: { $0.id == selectedAssetID }) else {
+        guard wallpaperEnabled,
+              let asset = assets.first(where: { $0.id == selectedAssetID }),
+              let localURL = asset.localURL
+        else {
             activeAssetID = nil
             wallpaper.clear()
             return
         }
         if asset.id != activeAssetID {
             activeAssetID = asset.id
-            wallpaper.setVideo(url: asset.url)
+            wallpaper.setVideo(url: localURL)
         }
         applyPlayback()
     }
