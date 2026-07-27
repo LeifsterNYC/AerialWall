@@ -12,11 +12,17 @@ struct AerialAsset: Identifiable, Hashable {
 
     var isDownloaded: Bool { localURL != nil }
 
-    /// "Tahoe Day" / "Tahoe Night" → ("Tahoe", .day / .night); nil otherwise.
+    private static let daySuffixes: Set<String> = ["Day", "Morning", "Sunrise", "Dawn", "Noon", "Afternoon"]
+    private static let nightSuffixes: Set<String> = ["Night", "Evening", "Sunset", "Dusk"]
+
+    /// "Sequoia Morning" → ("Sequoia", day); "Tahoe Night" → ("Tahoe", night);
+    /// nil when the name carries no time-of-day suffix.
     var dayNightVariant: (stem: String, isNight: Bool)? {
-        for (suffix, isNight) in [(" Day", false), (" Night", true)] where name.hasSuffix(suffix) {
-            return (String(name.dropLast(suffix.count)), isNight)
-        }
+        let parts = name.split(separator: " ")
+        guard parts.count > 1, let last = parts.last.map(String.init) else { return nil }
+        let stem = parts.dropLast().joined(separator: " ")
+        if Self.daySuffixes.contains(last) { return (stem, false) }
+        if Self.nightSuffixes.contains(last) { return (stem, true) }
         return nil
     }
 }
