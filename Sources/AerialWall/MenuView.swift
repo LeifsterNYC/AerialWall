@@ -357,11 +357,11 @@ private struct AssetTile: View {
 private struct PanelConfigurator: NSViewRepresentable {
     final class ConfigView: NSView {
         private var keyObserver: Any?
+        private var resignObserver: Any?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
-            window.hidesOnDeactivate = true
             Self.snugToMenuBar(window)
             keyObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didBecomeKeyNotification,
@@ -370,6 +370,18 @@ private struct PanelConfigurator: NSViewRepresentable {
             ) { notification in
                 guard let window = notification.object as? NSWindow else { return }
                 Self.snugToMenuBar(window)
+            }
+            // Never hidesOnDeactivate here: the status-item click opens the
+            // panel while the app is inactive, so AppKit would hide it
+            // immediately. Closing on resign-key dismisses it when focus
+            // moves to another menu bar item, window, or app.
+            resignObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResignKeyNotification,
+                object: window,
+                queue: .main
+            ) { notification in
+                guard let window = notification.object as? NSWindow, window.isVisible else { return }
+                window.close()
             }
         }
 
@@ -383,6 +395,9 @@ private struct PanelConfigurator: NSViewRepresentable {
         deinit {
             if let keyObserver {
                 NotificationCenter.default.removeObserver(keyObserver)
+            }
+            if let resignObserver {
+                NotificationCenter.default.removeObserver(resignObserver)
             }
         }
     }
