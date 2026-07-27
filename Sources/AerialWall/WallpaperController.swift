@@ -8,8 +8,17 @@ final class WallpaperController {
     private var player: AVQueuePlayer?
     private var looper: AVPlayerLooper?
     private var screenObserver: Any?
+    private var occlusionObserver: Any?
 
     var isPlaying: Bool { (player?.rate ?? 0) > 0 }
+
+    /// True while at least one wallpaper window is actually visible —
+    /// false when fullscreen apps or the lock screen cover every desktop.
+    var isDesktopVisible: Bool {
+        windows.isEmpty || windows.contains { $0.occlusionState.contains(.visible) }
+    }
+
+    var onDesktopVisibilityChange: ((Bool) -> Void)?
 
     init() {
         screenObserver = NotificationCenter.default.addObserver(
@@ -18,6 +27,15 @@ final class WallpaperController {
             queue: .main
         ) { [weak self] _ in
             self?.rebuildWindows()
+        }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let window = notification.object as? NSWindow,
+                  self.windows.contains(window) else { return }
+            self.onDesktopVisibilityChange?(self.isDesktopVisible)
         }
     }
 

@@ -43,6 +43,9 @@ final class AppState: ObservableObject {
             }
         }
         powerMonitor.start()
+        wallpaper.onDesktopVisibilityChange = { [weak self] _ in
+            self?.applyPlayback()
+        }
         refreshLibrary()
     }
 
@@ -73,7 +76,8 @@ final class AppState: ObservableObject {
 
     private func applyPlayback() {
         guard wallpaperEnabled, !selectedAssetID.isEmpty else { return }
-        if pausesOnBattery && !isOnACPower {
+        let isBatteryBlocked = pausesOnBattery && !isOnACPower
+        if isBatteryBlocked || !wallpaper.isDesktopVisible {
             wallpaper.pause()
         } else {
             wallpaper.play()

@@ -43,7 +43,7 @@ macOS 14 Sonoma or later (Apple Silicon and Intel).
 ```bash
 git clone https://github.com/LeifsterNYC/AerialWall
 cd AerialWall
-./scripts/make-app.sh   # builds dist/AerialWall.app
+SPARKLE_PUBLIC_KEY=dev ./scripts/make-app.sh   # builds dist/AerialWall.app
 ```
 
 ## How it works

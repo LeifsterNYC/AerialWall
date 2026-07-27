@@ -84,6 +84,9 @@ struct MenuView: View {
                 Button("Refresh") { state.refreshLibrary() }
                 Button("Check for Updates…") { UpdaterService.shared.checkForUpdates() }
                 Spacer()
+                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Button("Quit") { NSApp.terminate(nil) }
             }
             .controlSize(.small)

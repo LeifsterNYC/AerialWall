@@ -31,6 +31,7 @@ rm -rf dist
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
 cp "$BIN_DIR/AerialWall" "$APP/Contents/MacOS/AerialWall"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 sed -e "s|__VERSION__|$VERSION|g" \
     -e "s|__REPO__|$REPO|g" \

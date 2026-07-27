@@ -6,6 +6,8 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>AerialWall</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.leifrogers.AerialWall</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -31,6 +33,8 @@
 	<key>SUPublicEDKey</key>
 	<string>__SUPUBLICEDKEY__</string>
 	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
 	<true/>
 </dict>
 </plist>
