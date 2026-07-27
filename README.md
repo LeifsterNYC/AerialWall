@@ -7,11 +7,16 @@ screen and in System Settings → Wallpaper). AerialWall finds the ones you've
 downloaded and plays them as your actual desktop wallpaper — behind your icons,
 on every Space and display.
 
-- **Native and light** — AVFoundation with hardware video decode, no browser engine
-- **Nice picker** — a menu-bar gallery of your downloaded aerials with thumbnails
+- **Native and light** — AVFoundation with hardware video decode, no browser engine; pauses under fullscreen apps and on the lock screen
+- **Browse Apple's whole catalog** — all ~156 aerials with previews, searchable and filterable by category; click to download, hover-✕ to delete
+- **Live previews** — hover any downloaded tile to see it in motion
+- **Shuffle** — rotate wallpapers every 15 minutes/hour/day, or jump with ⌃⌥⌘N
+- **Day/night aware** — optionally match light/dark mode with day/night variants
+- **Per-display** — a different wallpaper on each monitor
+- **Your own videos** — import any `.mov`/`.mp4` as a live wallpaper
 - **Battery-aware** — pauses on battery, resumes on the power cable (toggleable)
-- **Auto-updates** — via Sparkle
-- **No bundled videos** — it only plays the aerials Apple already put on your Mac
+- **Auto-updates** — via Sparkle, silent
+- **No bundled videos** — aerials download straight from Apple's own CDN
 
 ## Install
 

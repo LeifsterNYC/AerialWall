@@ -8,18 +8,40 @@ struct AerialAsset: Identifiable, Hashable {
     let remoteURL: URL?
     let previewURL: URL?
     let isDeletable: Bool
+    let categoryIDs: [String]
 
     var isDownloaded: Bool { localURL != nil }
+
+    /// "Tahoe Day" / "Tahoe Night" → ("Tahoe", .day / .night); nil otherwise.
+    var dayNightVariant: (stem: String, isNight: Bool)? {
+        for (suffix, isNight) in [(" Day", false), (" Night", true)] where name.hasSuffix(suffix) {
+            return (String(name.dropLast(suffix.count)), isNight)
+        }
+        return nil
+    }
+}
+
+struct AerialCategory: Identifiable, Hashable {
+    let id: String
+    let name: String
 }
 
 /// Reads Apple's aerial manifest (all ~156 wallpapers with CDN download and
 /// preview URLs) and merges it with the videos already on disk — Apple's own
 /// downloads plus AerialWall's.
 enum AerialLibrary {
+    static let videoExtensions: Set<String> = ["mov", "mp4", "m4v"]
+
     /// Directory for videos downloaded in-app.
     static var downloadsDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/AerialWall/videos")
+    }
+
+    /// Directory for user-imported videos.
+    static var customDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/AerialWall/custom")
     }
 
     /// (videos directory, manifest file) pairs, newest OS layout first.
@@ -31,6 +53,7 @@ enum AerialLibrary {
             (tahoe.appendingPathComponent("videos"), tahoe.appendingPathComponent("manifest/entries.json")),
             (legacy.appendingPathComponent("4KSDR240FPS"), legacy.appendingPathComponent("entries.json")),
             (downloadsDirectory, nil),
+            (customDirectory, nil),
         ]
     }
 
@@ -49,17 +72,48 @@ enum AerialLibrary {
                 localURL: local?.url,
                 remoteURL: entry.videoURL,
                 previewURL: entry.previewURL,
-                isDeletable: local?.isDeletable ?? false
+                isDeletable: local?.isDeletable ?? false,
+                categoryIDs: entry.categoryIDs
             ))
         }
-        // Local videos missing from the manifest still deserve a tile.
+        // Local videos missing from the manifest (imports, orphans) still get a tile.
         for (id, local) in localFiles where !coveredIDs.contains(id) {
+            let isCustom = local.url.deletingLastPathComponent().standardizedFileURL.path
+                == customDirectory.standardizedFileURL.path
             assets.append(AerialAsset(
-                id: id, name: id, localURL: local.url,
-                remoteURL: nil, previewURL: nil, isDeletable: local.isDeletable
+                id: id,
+                name: isCustom ? local.url.deletingPathExtension().lastPathComponent : id,
+                localURL: local.url,
+                remoteURL: nil, previewURL: nil,
+                isDeletable: local.isDeletable,
+                categoryIDs: isCustom ? [Self.customCategoryID] : []
             ))
         }
         return assets.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    static let customCategoryID = "aerialwall.custom"
+
+    static func categories() -> [AerialCategory] {
+        var categories: [AerialCategory] = []
+        for location in searchLocations {
+            guard let manifest = location.manifest,
+                  let data = try? Data(contentsOf: manifest),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let entries = json["categories"] as? [[String: Any]], !entries.isEmpty
+            else { continue }
+            categories = entries.compactMap { entry in
+                guard let id = entry["id"] as? String,
+                      let key = entry["localizedNameKey"] as? String else { return nil }
+                let name = key.replacingOccurrences(of: "AerialCategory", with: "")
+                return AerialCategory(id: id, name: name)
+            }
+            break
+        }
+        if (try? FileManager.default.contentsOfDirectory(atPath: customDirectory.path))?.isEmpty == false {
+            categories.append(AerialCategory(id: customCategoryID, name: "My Videos"))
+        }
+        return categories
     }
 
     private struct ManifestEntry {
@@ -67,6 +121,7 @@ enum AerialLibrary {
         let name: String
         let videoURL: URL?
         let previewURL: URL?
+        let categoryIDs: [String]
     }
 
     private static func manifestEntries() -> [ManifestEntry] {
@@ -82,7 +137,8 @@ enum AerialLibrary {
                     id: id,
                     name: entry["accessibilityLabel"] as? String ?? id,
                     videoURL: (entry["url-4K-SDR-240FPS"] as? String).flatMap(URL.init(string:)),
-                    previewURL: (entry["previewImage"] as? String).flatMap(URL.init(string:))
+                    previewURL: (entry["previewImage"] as? String).flatMap(URL.init(string:)),
+                    categoryIDs: entry["categories"] as? [String] ?? []
                 )
             }
         }
@@ -94,7 +150,7 @@ enum AerialLibrary {
         var found: [String: (url: URL, isDeletable: Bool)] = [:]
         for location in searchLocations {
             guard let files = try? fm.contentsOfDirectory(at: location.videos, includingPropertiesForKeys: nil) else { continue }
-            for file in files where file.pathExtension.lowercased() == "mov" {
+            for file in files where videoExtensions.contains(file.pathExtension.lowercased()) {
                 let id = file.deletingPathExtension().lastPathComponent.uppercased()
                 guard found[id] == nil else { continue }
                 let isDeletable = fm.isDeletableFile(atPath: file.path)

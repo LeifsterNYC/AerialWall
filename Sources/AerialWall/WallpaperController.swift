@@ -1,16 +1,21 @@
 import AVFoundation
 import AppKit
 
-/// Plays a looping video in borderless windows pinned at desktop level,
-/// one per screen, behind icons on every Space.
+/// Plays looping videos in borderless windows pinned at desktop level,
+/// one per screen, behind icons on every Space. Screens can share one video
+/// or each have their own; players are created per unique video.
 final class WallpaperController {
+    private struct PlayerSet {
+        let player: AVQueuePlayer
+        let looper: AVPlayerLooper
+    }
+
     private var windows: [NSWindow] = []
-    private var player: AVQueuePlayer?
-    private var looper: AVPlayerLooper?
+    private var players: [URL: PlayerSet] = [:]
+    private var assignments: [String: URL] = [:]
+    private var fallbackURL: URL?
     private var screenObserver: Any?
     private var occlusionObserver: Any?
-
-    var isPlaying: Bool { (player?.rate ?? 0) > 0 }
 
     /// True while at least one wallpaper window is actually visible —
     /// false when fullscreen apps or the lock screen cover every desktop.
@@ -39,33 +44,51 @@ final class WallpaperController {
         }
     }
 
-    func setVideo(url: URL) {
-        let item = AVPlayerItem(url: url)
-        let player = AVQueuePlayer()
-        player.isMuted = true
-        player.preventsDisplaySleepDuringVideoPlayback = false
-        looper = AVPlayerLooper(player: player, templateItem: item)
-        self.player = player
+    static func screenID(for screen: NSScreen) -> String? {
+        guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(number)?.takeRetainedValue()
+        else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
+    /// `fallback` plays on every screen without an explicit per-screen entry.
+    func setVideos(fallback: URL?, perScreen: [String: URL]) {
+        fallbackURL = fallback
+        assignments = perScreen
         rebuildWindows()
     }
 
-    func play() { player?.play() }
-    func pause() { player?.pause() }
+    func play() { players.values.forEach { $0.player.play() } }
+    func pause() { players.values.forEach { $0.player.pause() } }
 
     func clear() {
-        player?.pause()
-        player = nil
-        looper = nil
-        windows.forEach { $0.orderOut(nil) }
-        windows = []
+        setVideos(fallback: nil, perScreen: [:])
+    }
+
+    private func url(for screen: NSScreen) -> URL? {
+        if let id = Self.screenID(for: screen), let url = assignments[id] {
+            return url
+        }
+        return fallbackURL
     }
 
     private func rebuildWindows() {
         windows.forEach { $0.orderOut(nil) }
         windows = []
-        guard let player else { return }
+
+        let neededURLs = Set(NSScreen.screens.compactMap { url(for: $0) })
+        players = players.filter { neededURLs.contains($0.key) }
+        for url in neededURLs where players[url] == nil {
+            let player = AVQueuePlayer()
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            let looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
+            players[url] = PlayerSet(player: player, looper: looper)
+        }
+        guard !players.isEmpty else { return }
 
         for screen in NSScreen.screens {
+            guard let url = url(for: screen), let playerSet = players[url] else { continue }
             let window = NSWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,
@@ -81,7 +104,7 @@ final class WallpaperController {
 
             let view = NSView(frame: screen.frame)
             view.wantsLayer = true
-            let playerLayer = AVPlayerLayer(player: player)
+            let playerLayer = AVPlayerLayer(player: playerSet.player)
             playerLayer.frame = view.bounds
             playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
             playerLayer.videoGravity = .resizeAspectFill

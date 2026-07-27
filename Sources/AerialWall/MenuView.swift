@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct MenuView: View {
@@ -11,15 +12,53 @@ struct MenuView: View {
 
     @State private var tab: Tab = .downloaded
     @State private var searchText = ""
+    @State private var categoryID: String?
+    @State private var targetScreenID: String?
 
     private let columns = [GridItem(.adaptive(minimum: 132), spacing: 10)]
 
+    private var screens: [(id: String, name: String)] {
+        NSScreen.screens.compactMap { screen in
+            WallpaperController.screenID(for: screen).map { ($0, screen.localizedName) }
+        }
+    }
+
     private var visibleAssets: [AerialAsset] {
         var shown = tab == .downloaded ? state.assets.filter(\.isDownloaded) : state.assets
+        if let categoryID {
+            shown = shown.filter { $0.categoryIDs.contains(categoryID) }
+        }
         if !searchText.isEmpty {
             shown = shown.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
         return shown
+    }
+
+    private func isSelected(_ asset: AerialAsset) -> Bool {
+        if let targetScreenID {
+            return state.displayAssignments[targetScreenID] == asset.id
+        }
+        return state.selectedAssetID == asset.id
+    }
+
+    private func tileTapped(_ asset: AerialAsset) {
+        if asset.isDownloaded {
+            if let targetScreenID {
+                // Tapping the assigned tile again clears the override.
+                let isAlreadyAssigned = state.displayAssignments[targetScreenID] == asset.id
+                state.assign(isAlreadyAssigned ? nil : asset.id, toDisplay: targetScreenID)
+            } else {
+                // "All Displays" means all: per-display overrides are replaced.
+                state.selectedAssetID = asset.id
+                state.displayAssignments = [:]
+            }
+            state.wallpaperEnabled = true
+            state.offerCounterpartIfNeeded(for: asset)
+        } else if downloader.progress[asset.id] != nil {
+            downloader.cancel(asset)
+        } else {
+            state.downloadAndSelect(asset, forDisplay: targetScreenID)
+        }
     }
 
     var body: some View {
@@ -67,12 +106,55 @@ struct MenuView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            TextField("Search wallpapers", text: $searchText)
-                .textFieldStyle(.roundedBorder)
+
+            HStack(spacing: 6) {
+                TextField("Search wallpapers", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+                Button {
+                    state.importCustomVideos()
+                } label: {
+                    Image(systemName: "plus")
+                }
                 .controlSize(.small)
+                .help("Add your own video as a wallpaper")
+            }
+
+            if screens.count > 1 {
+                Picker("Display", selection: $targetScreenID) {
+                    Text("All Displays").tag(String?.none)
+                    ForEach(screens, id: \.id) { screen in
+                        Text(screen.name).tag(String?.some(screen.id))
+                    }
+                }
+                .controlSize(.small)
+                .help("Pick which display the next selection applies to")
+            }
+
+            categoryChips
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder private var categoryChips: some View {
+        if !state.categories.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    chip(name: "All", id: nil)
+                    ForEach(state.categories) { category in
+                        chip(name: category.name, id: category.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(name: String, id: String?) -> some View {
+        Button(name) { categoryID = id }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(categoryID == id ? Color.accentColor : .secondary)
     }
 
     private var emptyState: some View {
@@ -101,18 +183,11 @@ struct MenuView: View {
                     AssetTile(
                         asset: asset,
                         thumbnail: state.thumbnails[asset.id],
-                        isSelected: state.selectedAssetID == asset.id,
+                        isSelected: isSelected(asset),
                         downloadProgress: downloader.progress[asset.id],
                         onDelete: asset.isDeletable ? { state.deleteDownload(asset) } : nil
                     ) {
-                        if asset.isDownloaded {
-                            state.selectedAssetID = asset.id
-                            state.wallpaperEnabled = true
-                        } else if downloader.progress[asset.id] != nil {
-                            downloader.cancel(asset)
-                        } else {
-                            state.downloadAndSelect(asset)
-                        }
+                        tileTapped(asset)
                     }
                     .contextMenu {
                         if asset.isDeletable {
@@ -123,17 +198,39 @@ struct MenuView: View {
             }
             .padding(12)
         }
-        .frame(height: min(contentHeight, 420))
+        .frame(height: min(contentHeight, 380))
         .opacity(state.wallpaperEnabled ? 1 : 0.5)
     }
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Only play on power cable", isOn: $state.pausesOnBattery)
+            Toggle("Match light/dark mode", isOn: $state.matchesAppearance)
             Toggle("Launch at login", isOn: Binding(
                 get: { state.launchesAtLogin },
                 set: { state.launchesAtLogin = $0 }
             ))
+            HStack {
+                Picker("Shuffle", selection: $state.shuffleIntervalSeconds) {
+                    Text("Off").tag(0.0)
+                    Text("Every 15 min").tag(900.0)
+                    Text("Every hour").tag(3600.0)
+                    Text("Every day").tag(86400.0)
+                }
+                .controlSize(.small)
+                Button {
+                    state.nextWallpaper()
+                } label: {
+                    Image(systemName: "forward.fill")
+                }
+                .controlSize(.small)
+                .help("Next wallpaper (⌃⌥⌘N)")
+            }
+            if state.managedVideoCount > 0 {
+                Text("\(state.managedVideoCount) video\(state.managedVideoCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: state.managedVideoBytes, countStyle: .file)) managed by AerialWall")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             HStack {
                 Button("Refresh") { state.refreshLibrary() }
                 Button("Check for Updates…") { UpdaterService.shared.checkForUpdates() }
@@ -160,6 +257,8 @@ private struct AssetTile: View {
     let action: () -> Void
 
     @State private var isHovering = false
+    @State private var showsLivePreview = false
+    @ObservedObject private var previewCache = PreviewImageCache.shared
 
     var body: some View {
         Button(action: action) {
@@ -181,7 +280,15 @@ private struct AssetTile: View {
         }
         .buttonStyle(.plain)
         .help(asset.isDownloaded ? asset.name : "Click to download \(asset.name)")
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            if !hovering { showsLivePreview = false }
+        }
+        .task(id: isHovering) {
+            guard isHovering, asset.isDownloaded else { return }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            if isHovering { showsLivePreview = true }
+        }
     }
 
     @ViewBuilder private var deleteButton: some View {
@@ -198,15 +305,20 @@ private struct AssetTile: View {
     }
 
     @ViewBuilder private var preview: some View {
-        if let thumbnail {
+        if showsLivePreview, let localURL = asset.localURL {
+            LoopingPlayerView(url: localURL)
+        } else if let thumbnail {
             Image(nsImage: thumbnail)
                 .resizable()
                 .aspectRatio(16 / 9, contentMode: .fill)
         } else if let previewURL = asset.previewURL {
-            AsyncImage(url: previewURL) { image in
-                image.resizable().aspectRatio(16 / 9, contentMode: .fill)
-            } placeholder: {
+            if let image = previewCache.image(for: previewURL) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(16 / 9, contentMode: .fill)
+            } else {
                 placeholder
+                    .onAppear { previewCache.load(previewURL) }
             }
         } else {
             placeholder
@@ -235,4 +347,33 @@ private struct AssetTile: View {
                 .padding(4)
         }
     }
+}
+
+/// Muted, looping inline video used for the hover preview.
+private struct LoopingPlayerView: NSViewRepresentable {
+    let url: URL
+
+    final class PlayerView: NSView {
+        private let player: AVQueuePlayer
+        private let looper: AVPlayerLooper
+
+        init(url: URL) {
+            player = AVQueuePlayer()
+            looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
+            super.init(frame: .zero)
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            let playerLayer = AVPlayerLayer(player: player)
+            playerLayer.videoGravity = .resizeAspectFill
+            wantsLayer = true
+            layer = playerLayer
+            player.play()
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+    }
+
+    func makeNSView(context: Context) -> PlayerView { PlayerView(url: url) }
+    func updateNSView(_ nsView: PlayerView, context: Context) {}
 }
