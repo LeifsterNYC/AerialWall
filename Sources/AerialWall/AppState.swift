@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     private let wallpaper = WallpaperController()
     private let powerMonitor = PowerMonitor()
     private var activeAssetID: String?
+    private var thumbnailTask: Task<Void, Never>?
 
     var launchesAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
@@ -51,14 +52,30 @@ final class AppState: ObservableObject {
 
     func refreshLibrary() {
         assets = AerialLibrary.scan()
-        for asset in assets where thumbnails[asset.id] == nil {
-            Task {
-                if let image = await AerialLibrary.thumbnail(for: asset) {
-                    self.thumbnails[asset.id] = image
+        generateMissingThumbnails()
+        applySelection()
+    }
+
+    /// Decodes a few thumbnails at a time, in display order — a large library
+    /// would otherwise spin up one 4K video decoder per asset simultaneously.
+    private func generateMissingThumbnails() {
+        thumbnailTask?.cancel()
+        let pending = assets.filter { thumbnails[$0.id] == nil }
+        guard !pending.isEmpty else { return }
+        thumbnailTask = Task {
+            for start in stride(from: 0, to: pending.count, by: 4) {
+                guard !Task.isCancelled else { return }
+                let batch = pending[start..<min(start + 4, pending.count)]
+                await withTaskGroup(of: (String, NSImage?).self) { group in
+                    for asset in batch {
+                        group.addTask { (asset.id, await AerialLibrary.thumbnail(for: asset)) }
+                    }
+                    for await (id, image) in group {
+                        if let image { self.thumbnails[id] = image }
+                    }
                 }
             }
         }
-        applySelection()
     }
 
     private func applySelection() {
