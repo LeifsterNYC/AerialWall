@@ -12,12 +12,16 @@ final class AppState: ObservableObject {
     @AppStorage("selectedAssetID") var selectedAssetID = "" {
         didSet { applySelection() }
     }
+    @AppStorage("wallpaperEnabled") var wallpaperEnabled = true {
+        didSet { applySelection() }
+    }
     @AppStorage("pausesOnBattery") var pausesOnBattery = true {
         didSet { applyPlayback() }
     }
 
     private let wallpaper = WallpaperController()
     private let powerMonitor = PowerMonitor()
+    private var activeAssetID: String?
 
     var launchesAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
@@ -40,7 +44,6 @@ final class AppState: ObservableObject {
         }
         powerMonitor.start()
         refreshLibrary()
-        applySelection()
     }
 
     func refreshLibrary() {
@@ -52,19 +55,24 @@ final class AppState: ObservableObject {
                 }
             }
         }
+        applySelection()
     }
 
     private func applySelection() {
-        guard let asset = assets.first(where: { $0.id == selectedAssetID }) else {
+        guard wallpaperEnabled, let asset = assets.first(where: { $0.id == selectedAssetID }) else {
+            activeAssetID = nil
             wallpaper.clear()
             return
         }
-        wallpaper.setVideo(url: asset.url)
+        if asset.id != activeAssetID {
+            activeAssetID = asset.id
+            wallpaper.setVideo(url: asset.url)
+        }
         applyPlayback()
     }
 
     private func applyPlayback() {
-        guard !selectedAssetID.isEmpty else { return }
+        guard wallpaperEnabled, !selectedAssetID.isEmpty else { return }
         if pausesOnBattery && !isOnACPower {
             wallpaper.pause()
         } else {

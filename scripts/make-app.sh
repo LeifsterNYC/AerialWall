@@ -6,7 +6,17 @@ cd "$(dirname "$0")/.."
 
 VERSION="${VERSION:-0.0.0-dev}"
 REPO="${REPO:-LeifsterNYC/AerialWall}"
-SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-MISSING_PUBLIC_KEY}"
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
+
+# A release without a real public key ships apps that can never verify an update.
+if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
+  if [[ "$VERSION" == "0.0.0-dev" ]]; then
+    SPARKLE_PUBLIC_KEY="DEV_BUILD_NO_UPDATES"
+  else
+    echo "SPARKLE_PUBLIC_KEY is required for release builds" >&2
+    exit 1
+  fi
+fi
 
 if [[ "${UNIVERSAL:-0}" == "1" ]]; then
   swift build -c release --arch arm64 --arch x86_64

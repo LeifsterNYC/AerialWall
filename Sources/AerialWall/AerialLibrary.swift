@@ -24,11 +24,13 @@ enum AerialLibrary {
     static func scan() -> [AerialAsset] {
         let fm = FileManager.default
         var assets: [AerialAsset] = []
+        var seenIDs: Set<String> = []
         for location in searchLocations {
             guard let files = try? fm.contentsOfDirectory(at: location.videos, includingPropertiesForKeys: nil) else { continue }
             let names = assetNames(manifest: location.manifest)
             for file in files where file.pathExtension.lowercased() == "mov" {
                 let id = file.deletingPathExtension().lastPathComponent
+                guard seenIDs.insert(id.uppercased()).inserted else { continue }
                 assets.append(AerialAsset(id: id, name: names[id.uppercased()] ?? id, url: file))
             }
         }

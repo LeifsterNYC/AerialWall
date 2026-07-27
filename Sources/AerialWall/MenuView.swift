@@ -23,15 +23,20 @@ struct MenuView: View {
     private var header: some View {
         HStack {
             Text("AerialWall").font(.headline)
-            Spacer()
-            if state.pausesOnBattery && !state.isOnACPower {
+            if state.wallpaperEnabled && state.pausesOnBattery && !state.isOnACPower {
                 Label("Paused on battery", systemImage: "battery.50percent")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Spacer()
+            Toggle("", isOn: $state.wallpaperEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .help("Turn the live wallpaper on or off")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 
     private var emptyState: some View {
@@ -47,7 +52,9 @@ struct MenuView: View {
     }
 
     private var gallery: some View {
-        ScrollView {
+        let rows = (state.assets.count + 1) / 2
+        let contentHeight = CGFloat(rows) * 104 + 14
+        return ScrollView {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(state.assets) { asset in
                     AssetTile(
@@ -55,13 +62,15 @@ struct MenuView: View {
                         thumbnail: state.thumbnails[asset.id],
                         isSelected: state.selectedAssetID == asset.id
                     ) {
-                        state.selectedAssetID = state.selectedAssetID == asset.id ? "" : asset.id
+                        state.selectedAssetID = asset.id
+                        state.wallpaperEnabled = true
                     }
                 }
             }
             .padding(12)
         }
-        .frame(maxHeight: 420)
+        .frame(height: min(contentHeight, 420))
+        .opacity(state.wallpaperEnabled ? 1 : 0.5)
     }
 
     private var footer: some View {
