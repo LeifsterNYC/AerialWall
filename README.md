@@ -15,6 +15,15 @@ on every Space and display.
 
 ## Install
 
+### Homebrew
+
+```bash
+brew tap leifsternyc/tap
+brew install --cask aerialwall
+```
+
+### Direct download
+
 1. Download `AerialWall.zip` from the [latest release](https://github.com/LeifsterNYC/AerialWall/releases/latest) and unzip.
 2. Move `AerialWall.app` to `/Applications`.
 3. First launch (the app isn't notarized): right-click the app → **Open**. If
