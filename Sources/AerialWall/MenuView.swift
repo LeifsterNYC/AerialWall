@@ -373,24 +373,14 @@ private struct PanelConfigurator: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
-            // Round the panel itself — the bare MenuBarExtra window is square.
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            if let contentView = window.contentView {
-                contentView.wantsLayer = true
-                contentView.layer?.cornerRadius = 16
-                contentView.layer?.cornerCurve = .continuous
-                contentView.layer?.masksToBounds = true
-            }
-            window.invalidateShadow()
-            Self.snugToMenuBar(window)
+            Self.configure(window)
             keyObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didBecomeKeyNotification,
                 object: window,
                 queue: .main
             ) { notification in
                 guard let window = notification.object as? NSWindow else { return }
-                Self.snugToMenuBar(window)
+                Self.configure(window)
             }
             // Never hidesOnDeactivate here: the status-item click opens the
             // panel while the app is inactive, so AppKit would hide it
@@ -412,9 +402,24 @@ private struct PanelConfigurator: NSViewRepresentable {
                 queue: .main
             ) { notification in
                 guard let window = notification.object as? NSWindow else { return }
-                Self.snugToMenuBar(window)
-                window.invalidateShadow()
+                Self.configure(window)
             }
+        }
+
+        /// Rounding must target the window's frame view (which draws the
+        /// backdrop) and be reapplied on every open and resize — AppKit
+        /// rebuilds these layers between appearances.
+        private static func configure(_ window: NSWindow) {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            if let frameView = window.contentView?.superview {
+                frameView.wantsLayer = true
+                frameView.layer?.cornerRadius = 16
+                frameView.layer?.cornerCurve = .continuous
+                frameView.layer?.masksToBounds = true
+            }
+            snugToMenuBar(window)
+            window.invalidateShadow()
         }
 
         private static func snugToMenuBar(_ window: NSWindow) {
