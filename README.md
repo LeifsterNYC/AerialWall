@@ -24,6 +24,7 @@ on every Space and display.
 
 ```bash
 brew tap leifsternyc/tap
+brew trust leifsternyc/tap
 brew install --cask aerialwall
 ```
 
@@ -31,13 +32,20 @@ brew install --cask aerialwall
 
 1. Download `AerialWall.zip` from the [latest release](https://github.com/LeifsterNYC/AerialWall/releases/latest) and unzip.
 2. Move `AerialWall.app` to `/Applications`.
-3. First launch (the app isn't notarized): right-click the app → **Open**. If
-   macOS still blocks it, go to **System Settings → Privacy & Security** and
-   click **Open Anyway**, or clear the quarantine flag:
 
-   ```bash
-   xattr -d com.apple.quarantine /Applications/AerialWall.app
-   ```
+### First launch (either method)
+
+The app isn't notarized, so macOS may block the first open:
+
+1. Open the app; when macOS says it can't verify it, click **Done** (not Move to Trash).
+2. Go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
+3. Click **Open Anyway** again on the confirmation popup.
+
+Or skip all of that from Terminal:
+
+```bash
+xattr -d com.apple.quarantine /Applications/AerialWall.app
+```
 
 ## Use
 
