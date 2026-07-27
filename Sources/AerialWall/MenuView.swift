@@ -239,7 +239,7 @@ struct MenuView: View {
                 .help("Next wallpaper (⌃⌥⌘N)")
             }
             if state.managedVideoCount > 0 {
-                Text("\(state.managedVideoCount) video\(state.managedVideoCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: state.managedVideoBytes, countStyle: .file)) managed by AerialWall")
+                Text("\(state.managedVideoCount) video\(state.managedVideoCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: state.managedVideoBytes, countStyle: .file)) on disk")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

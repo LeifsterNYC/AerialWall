@@ -175,15 +175,12 @@ final class AppState: ObservableObject {
     }
 
     private func refreshStorageStats() {
-        let fm = FileManager.default
         var count = 0
         var bytes: Int64 = 0
-        for directory in [AerialLibrary.downloadsDirectory, AerialLibrary.customDirectory] {
-            guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey]) else { continue }
-            for file in files where AerialLibrary.videoExtensions.contains(file.pathExtension.lowercased()) {
-                count += 1
-                bytes += Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-            }
+        for asset in assets {
+            guard let localURL = asset.localURL else { continue }
+            count += 1
+            bytes += Int64((try? localURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
         managedVideoCount = count
         managedVideoBytes = bytes
