@@ -9,7 +9,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    # macOS 26 SDK required: on Tahoe, apps linked against older SDKs get
+    # legacy window chrome (square panels).
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
